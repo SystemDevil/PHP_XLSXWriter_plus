@@ -89,7 +89,7 @@ $data = array(
 );
 
 $writer = new XLSXWriter();
-$writer->writeSheet($data,'Sheet1', $header);
+$writer->writeSheet($data,'Sheet1', $header, $style);
 $writer->writeToFile('example.xlsx');
 ```
 
@@ -102,10 +102,9 @@ Cell Styling
     $writer->setHorizontalAlign('left'); //default document horizontal alilgn
     $writer->setStartRow(10); //set start data filling row
     $writer->setStartCol(0); //set start data filling column
-    $writer->allDataFilledStyleFirst(false); //if true - 1st element of array will be used for styling all data filled cells
 
     //set styles
-    $writer->setStyle(
+    $writer->writeSheet($data, 'Sheet1', $header,
       array (
         array( // in each style element you can use or 'cells', or 'rows' or 'columns'.
           'font' => array(
@@ -138,6 +137,11 @@ Cell Styling
             'color' => 'F000F0'),
           'rows' => array(
             '0','1') //for only one and firs row dont use 'rows' => '0', use 'rows' => array('0')
+          )
+          array(
+          'fill' => array(
+            'color' => 'F000F0'),
+            'allfilleddata' => true //for all filled data cells - can be used without: columns, rows, cells!
           )
         )
       );

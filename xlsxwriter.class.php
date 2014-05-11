@@ -18,7 +18,7 @@ Class XLSXWriter
 	protected $defaultStartRow = 0;
 	protected $defaultStartCol = 0;
 
-	protected $defaultStyle = '';
+	protected $defaultStyle = array();
 
 	protected $fontsCount = 1; //1 font must be in structure
 	protected $fontSize = 8;
@@ -37,7 +37,6 @@ Class XLSXWriter
 	protected $fillId = 1; //fill counting from index - 0, means 0,1 - 2 elements
 
 	protected $stylesCount = 1;//1 style must be in structure
-	protected $allDataFilledStyleFirst = false;//if true - use first style as style for all data filed cells
 
 	protected $sheets_meta = array();
 	protected $shared_strings = array();//unique set
@@ -51,8 +50,7 @@ Class XLSXWriter
 	public function setWrapText($defaultWrapText) { $this->defaultWrapText=$defaultWrapText; }
 	public function setVerticalAlign($defaultVerticalAlign) { $this->defaultVerticalAlign=$defaultVerticalAlign; }
 	public function setHorizontalAlign($defaultHorizontalAlign) { $this->defaultHorizontalAlign=$defaultHorizontalAlign; }
-	public function setStyle($defaultStyle) { $this->defaultStyle=$defaultStyle; }
-	public function allDataFilledStyleFirst($allDataFilledStyleFirst) { $this->allDataFilledStyleFirst=$allDataFilledStyleFirst; }
+	private function setStyle($defaultStyle) { $this->defaultStyle=$defaultStyle; }
 	public function setStartRow($defaultStartRow) { $this->defaultStartRow=($defaultStartRow > 0) ? ((int)$defaultStartRow - 1) : 0; }
 	public function setStartCol($defaultStartCol) { $this->defaultStartCol=($defaultStartCol > 0) ? ((int)$defaultStartCol - 1) : 0; }
 
@@ -118,10 +116,15 @@ Class XLSXWriter
 	}
 
 	
-	public function writeSheet(array $data, $sheet_name='', array $header_types=array() )
+	public function writeSheet(array $data, $sheet_name='', array $header_types=array(), array $styles )
 	{
+		for ($i = 0; $i < count($styles); $i++) {
+			$styles[$i] += array('sheet' => $sheet_name);
+		}
+		$this->setStyle(array_merge((array)$this->defaultStyle, (array)$styles));
+
 		$data = empty($data) ? array( array('') ) : $data;
-		
+
 		$sheet_filename = $this->tempFilename();
 		$sheet_default = 'Sheet'.(count($this->sheets_meta)+1);
 		$sheet_name = !empty($sheet_name) ? $sheet_name : $sheet_default;
@@ -159,7 +162,7 @@ Class XLSXWriter
 			fwrite($fd, '<row collapsed="false" customFormat="false" customHeight="false" hidden="false" ht="12.1" outlineLevel="0" r="'.($this->defaultStartRow + 1).'">');
 			foreach($header_row as $k=>$v)
 			{
-				$this->writeCell($fd, $this->defaultStartRow + 0, $this->defaultStartCol + $k, $v, $cell_format='string');
+				$this->writeCell($fd, $this->defaultStartRow + 0, $this->defaultStartCol + $k, $v, $sheet_name);
 			}
 			fwrite($fd, '</row>');
 		}
@@ -168,7 +171,7 @@ Class XLSXWriter
 			fwrite($fd, '<row collapsed="false" customFormat="false" customHeight="false" hidden="false" ht="12.1" outlineLevel="0" r="'.($i+$header_offset+1).'">');
 			foreach($row as $k=>$v)
 			{
-				$this->writeCell($fd, $i+$header_offset, $this->defaultStartCol + $k, $v, $cell_formats_arr[$k]);
+				$this->writeCell($fd, $i+$header_offset, $this->defaultStartCol + $k, $v, $sheet_name);
 			}
 			fwrite($fd, '</row>');
 		}
@@ -184,32 +187,36 @@ Class XLSXWriter
 		fclose($fd);
 	}
 
-	protected function writeCell($fd, $row_number, $column_number, $value)
+	protected function writeCell($fd, $row_number, $column_number, $value, $sheet_name)
 	{
 		$cell = self::xlsCell($row_number, $column_number);
 		$s = '0';
 		if ($this->defaultStyle) {
 			foreach ($this->defaultStyle as $key => $style) {
-				if (($this->allDataFilledStyleFirst) && ($key == 0)) {
-					$s = $key + 1;
-				} else {
-					if (isset($style['columns'])) {
-						if (is_array($style['columns'])) {
-							if (in_array($column_number, $style['columns'])) $s = $key + 1;
+				if (isset($style['sheet'])) {
+					if ($style['sheet'] == $sheet_name) {
+						if (isset($style['allfilleddata'])) {
+							$s = $key + 1;
 						} else {
-							if ($column_number == $style['columns']) $s = $key + 1;
-						}
-					} elseif (isset($style['rows'])) {
-						if (is_array($style['rows'])) {
-							if (in_array($row_number, $style['rows'])) $s = $key + 1;
-						} else {
-							if ($row_number == $style['rows']) $s = $key + 1;
-						}
-					} elseif (isset($style['cells'])) {
-						if (is_array($style['cells'])) {
-							if (in_array($cell, $style['cells'])) $s = $key + 1;
-						} else {
-							if ($cell == $style['cells']) $s = $key + 1;
+							if (isset($style['columns'])) {
+								if (is_array($style['columns'])) {
+									if (in_array($column_number, $style['columns'])) $s = $key + 1;
+								} else {
+									if ($column_number == $style['columns']) $s = $key + 1;
+								}
+							} elseif (isset($style['rows'])) {
+								if (is_array($style['rows'])) {
+									if (in_array($row_number, $style['rows'])) $s = $key + 1;
+								} else {
+									if ($row_number == $style['rows']) $s = $key + 1;
+								}
+							} elseif (isset($style['cells'])) {
+								if (is_array($style['cells'])) {
+									if (in_array($cell, $style['cells'])) $s = $key + 1;
+								} else {
+									if ($cell == $style['cells']) $s = $key + 1;
+								}
+							}
 						}
 					}
 				}
@@ -239,7 +246,9 @@ Class XLSXWriter
 		fwrite($fd, '<styleSheet xmlns:x14ac="http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac" mc:Ignorable="x14ac" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">');
 		if ($this->defaultStyle) {
 			foreach ($this->defaultStyle as $style) {
-				if (isset($style['font'])) $this->fontsCount++;
+				if (isset($style['sheet'])) {
+					if (isset($style['font'])) $this->fontsCount++;
+				}
 			}
 		}
 		fwrite($fd, '<fonts x14ac:knownFonts="1" count="'.$this->fontsCount.'">');
@@ -258,40 +267,44 @@ Class XLSXWriter
 		fwrite($fd, '	</font>');
 		if ($this->defaultStyle) {
 			foreach ($this->defaultStyle as $style) {
-				if (isset($style['font'])) {
-					if (isset($style['font']['name'])) $this->fontName = $style['font']['name'];
-					if (isset($style['font']['size'])) $this->fontSize = $style['font']['size'];
-					if (isset($style['font']['color'])) $this->fontColor = $style['font']['color'];
-					if ($style['font']['bold']) $this->fontStyles .= '<b/>';
-					if ($style['font']['italic']) $this->fontStyles .= '<i/>';
-					if ($style['font']['underline']) $this->fontStyles .= '<u/>';
+				if (isset($style['sheet'])) {
+					if (isset($style['font'])) {
+						if (isset($style['font']['name'])) $this->fontName = $style['font']['name'];
+						if (isset($style['font']['size'])) $this->fontSize = $style['font']['size'];
+						if (isset($style['font']['color'])) $this->fontColor = $style['font']['color'];
+						if ($style['font']['bold']) $this->fontStyles .= '<b/>';
+						if ($style['font']['italic']) $this->fontStyles .= '<i/>';
+						if ($style['font']['underline']) $this->fontStyles .= '<u/>';
 
-					fwrite($fd, '	<font>');
-					if ($this->fontStyles) fwrite($fd, '		'.$this->fontStyles);
-					fwrite($fd, '		<sz val="'.$this->fontSize.'"/>');
-					if ($this->fontColor) {
-						fwrite($fd, '		<color rgb="FF'.$this->fontColor.'"/>');
-					} else {
-						fwrite($fd, '		<color theme="1"/>');
+						fwrite($fd, '	<font>');
+						if ($this->fontStyles) fwrite($fd, '		'.$this->fontStyles);
+						fwrite($fd, '		<sz val="'.$this->fontSize.'"/>');
+						if ($this->fontColor) {
+							fwrite($fd, '		<color rgb="FF'.$this->fontColor.'"/>');
+						} else {
+							fwrite($fd, '		<color theme="1"/>');
+						}
+						fwrite($fd, '		<name val="'.$this->fontName.'"/>');
+						fwrite($fd, '		<fasmily val="2"/>');
+						if ($this->fontName == 'MS Sans Serif') {
+							fwrite($fd, '		<charset val="204"/>');
+						} else if ($this->fontName == 'Calibri') {
+							fwrite($fd, '		<scheme val="minor"/>');
+						} else {
+							fwrite($fd, '		<charset val="204"/>');
+						}
+						fwrite($fd, '	</font>');
 					}
-					fwrite($fd, '		<name val="'.$this->fontName.'"/>');
-					fwrite($fd, '		<fasmily val="2"/>');
-					if ($this->fontName == 'MS Sans Serif') {
-						fwrite($fd, '		<charset val="204"/>');
-					} else if ($this->fontName == 'Calibri') {
-						fwrite($fd, '		<scheme val="minor"/>');
-					} else {
-						fwrite($fd, '		<charset val="204"/>');
-					}
-					fwrite($fd, '	</font>');
+					$this->fontStyles = '';
 				}
-				$this->fontStyles = '';
 			}
 		}
 		fwrite($fd, '</fonts>');
 		if ($this->defaultStyle) {
 			foreach ($this->defaultStyle as $style) {
-				if (isset($style['fill'])) $this->fillsCount++;
+				if (isset($style['sheet'])) {
+					if (isset($style['fill'])) $this->fillsCount++;
+				}
 			}
 		}
 		fwrite($fd, '<fills count="'.$this->fillsCount.'">');
@@ -299,21 +312,25 @@ Class XLSXWriter
 		fwrite($fd, '	<fill><patternFill patternType="gray125"/></fill>');
 		if ($this->defaultStyle) {
 			foreach ($this->defaultStyle as $style) {
-				if (isset($style['fill'])) {
-					if (isset($style['fill']['color'])) $this->fillColor = $style['fill']['color'];
-					fwrite($fd, '	<fill>');
-					fwrite($fd, '		<patternFill patternType="solid">');
-					fwrite($fd, '			<fgColor rgb="FF'.$this->fillColor.'"/>');
-					fwrite($fd, '			<bgColor indexed="64"/>');
-					fwrite($fd, '		</patternFill>');
-					fwrite($fd, '	</fill>');
+				if (isset($style['sheet'])) {
+					if (isset($style['fill'])) {
+						if (isset($style['fill']['color'])) $this->fillColor = $style['fill']['color'];
+						fwrite($fd, '	<fill>');
+						fwrite($fd, '		<patternFill patternType="solid">');
+						fwrite($fd, '			<fgColor rgb="FF'.$this->fillColor.'"/>');
+						fwrite($fd, '			<bgColor indexed="64"/>');
+						fwrite($fd, '		</patternFill>');
+						fwrite($fd, '	</fill>');
+					}
 				}
 			}
 		}
 		fwrite($fd, '</fills>');
 		if ($this->defaultStyle) {
 			foreach ($this->defaultStyle as $style) {
-				if (isset($style['border'])) $this->bordersCount++;
+				if (isset($style['sheet'])) {
+					if (isset($style['border'])) $this->bordersCount++;
+				}
 			}
 		}
 		fwrite($fd, '<borders count="'.$this->bordersCount.'">');
@@ -322,16 +339,18 @@ Class XLSXWriter
 		fwrite($fd, '	</border>');
 		if ($this->defaultStyle) {
 			foreach ($this->defaultStyle as $style) {
-				if (isset($style['border'])) {
-					if (isset($style['border']['style'])) $this->bordersStyle = ' style="'.$style['border']['style'].'"';
-					if (isset($style['border']['color'])) $this->bordersColor = '<color rgb="FF'.$style['border']['color'].'"/>';
-					fwrite($fd, '	<border>');
-					fwrite($fd, '		<left'.$this->bordersStyle.'>'.$this->bordersColor.'</left>');
-					fwrite($fd, '		<right'.$this->bordersStyle.'>'.$this->bordersColor.'</right>');
-					fwrite($fd, '		<top'.$this->bordersStyle.'>'.$this->bordersColor.'</top>');
-					fwrite($fd, '		<bottom'.$this->bordersStyle.'>'.$this->bordersColor.'</bottom>');
-					fwrite($fd, '		<diagonal/>');
-					fwrite($fd, '	</border>');
+				if (isset($style['sheet'])) {
+					if (isset($style['border'])) {
+						if (isset($style['border']['style'])) $this->bordersStyle = ' style="'.$style['border']['style'].'"';
+						if (isset($style['border']['color'])) $this->bordersColor = '<color rgb="FF'.$style['border']['color'].'"/>';
+						fwrite($fd, '	<border>');
+						fwrite($fd, '		<left'.$this->bordersStyle.'>'.$this->bordersColor.'</left>');
+						fwrite($fd, '		<right'.$this->bordersStyle.'>'.$this->bordersColor.'</right>');
+						fwrite($fd, '		<top'.$this->bordersStyle.'>'.$this->bordersColor.'</top>');
+						fwrite($fd, '		<bottom'.$this->bordersStyle.'>'.$this->bordersColor.'</bottom>');
+						fwrite($fd, '		<diagonal/>');
+						fwrite($fd, '	</border>');
+					}
 				}
 			}
 		}
@@ -345,42 +364,44 @@ Class XLSXWriter
 		fwrite($fd, 		'<xf borderId="0" fillId="0" fontId="0" numFmtId="0" xfId="0"><alignment wrapText="'.$this->defaultWrapText.'" vertical="'.$this->defaultVerticalAlign.'" horizontal="'.$this->defaultHorizontalAlign.'"/></xf>');
 		if ($this->defaultStyle) {
 			foreach ($this->defaultStyle as $style) {
-				if (isset($style['font'])) {
-					$font_Id = $this->fontId += 1;
-				} else {
-					$font_Id = 0;
-				}
-				if (isset($style['fill'])) {
-					$fill_Id = $this->fillId += 1;
-				} else {
-					$fill_Id = 0;
-				}
-				if (isset($style['border'])) {
-					$border_Id = $this->borderId += 1;
-				} else {
-					$border_Id = 0;
-				}
-				if (isset($style['wrapText'])) {
-					$wrapText = ($style['wrapText']) ? '1' : '0';
-				} else {
-					$wrapText = $this->defaultWrapText;
-				}
+				if (isset($style['sheet'])) {
+					if (isset($style['font'])) {
+						$font_Id = $this->fontId += 1;
+					} else {
+						$font_Id = 0;
+					}
+					if (isset($style['fill'])) {
+						$fill_Id = $this->fillId += 1;
+					} else {
+						$fill_Id = 0;
+					}
+					if (isset($style['border'])) {
+						$border_Id = $this->borderId += 1;
+					} else {
+						$border_Id = 0;
+					}
+					if (isset($style['wrapText'])) {
+						$wrapText = ($style['wrapText']) ? '1' : '0';
+					} else {
+						$wrapText = $this->defaultWrapText;
+					}
 
-				$format_Id = (isset($style['format'])) ? $style['format'] : '0';
+					$format_Id = (isset($style['format'])) ? $style['format'] : '0';
 
-				if (isset($style['verticalAlign'])) {
-					$verticalAlign = $style['verticalAlign'];
-				} else {
-					$verticalAlign = $this->defaultVerticalAlign;
+					if (isset($style['verticalAlign'])) {
+						$verticalAlign = $style['verticalAlign'];
+					} else {
+						$verticalAlign = $this->defaultVerticalAlign;
+					}
+					if (isset($style['horizontalAlign'])) {
+						$horizontalAlign = $style['horizontalAlign'];
+					} else {
+						$horizontalAlign = $this->defaultHorizontalAlign;
+					}
+					fwrite($fd, 		'<xf borderId="'.$border_Id.'" fillId="'.$fill_Id.'" fontId="'.$font_Id.'" numFmtId="'.$format_Id.'" xfId="0" applyFill="1">');
+					fwrite($fd, 			'<alignment wrapText="'.$wrapText.'" vertical="'.$verticalAlign.'" horizontal="'.$horizontalAlign.'"/>');
+					fwrite($fd, 		'</xf>');
 				}
-				if (isset($style['horizontalAlign'])) {
-					$horizontalAlign = $style['horizontalAlign'];
-				} else {
-					$horizontalAlign = $this->defaultHorizontalAlign;
-				}
-				fwrite($fd, 		'<xf borderId="'.$border_Id.'" fillId="'.$fill_Id.'" fontId="'.$font_Id.'" numFmtId="'.$format_Id.'" xfId="0" applyFill="1">');
-				fwrite($fd, 			'<alignment wrapText="'.$wrapText.'" vertical="'.$verticalAlign.'" horizontal="'.$horizontalAlign.'"/>');
-				fwrite($fd, 		'</xf>');
 			}
 		}
 		fwrite($fd, 	'</cellXfs>');
