@@ -1,6 +1,7 @@
 <?php
 /*
  * @license MIT License
+ * Bug fixes by smiffy6969 as per issues raised on github https://github.com/SystemDevil/PHP_XLSXWriter_plus
  * */
 
 if (!class_exists('ZipArchive')) { throw new Exception('ZipArchive not found'); }
@@ -116,7 +117,7 @@ Class XLSXWriter
 	}
 
 	
-	public function writeSheet(array $data, $sheet_name='', array $header_types=array(), array $styles )
+	public function writeSheet(array $data, $sheet_name='', array $header_types=array(), array $styles=array())
 	{
 		for ($i = 0; $i < count($styles); $i++) {
 			$styles[$i] += array('sheet' => $sheet_name);
@@ -224,9 +225,9 @@ Class XLSXWriter
 		}
 		if (is_numeric($value)) {
 			fwrite($fd,'<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.($value*1).'</v></c>');//int,float, etc
-		} else if ($cell_format=='date') {
+		} else if ($value=='date') {
 			fwrite($fd,'<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.intval(self::convert_date_time($value)).'</v></c>');
-		} else if ($cell_format=='datetime') {
+		} else if ($value=='datetime') {
 			fwrite($fd,'<c r="'.$cell.'" s="'.$s.'" t="n"><v>'.self::convert_date_time($value).'</v></c>');
 		} else if ($value==''){
 			fwrite($fd,'<c r="'.$cell.'" s="'.$s.'"/>');
@@ -269,12 +270,12 @@ Class XLSXWriter
 			foreach ($this->defaultStyle as $style) {
 				if (isset($style['sheet'])) {
 					if (isset($style['font'])) {
-						if (isset($style['font']['name'])) $this->fontName = $style['font']['name'];
-						if (isset($style['font']['size'])) $this->fontSize = $style['font']['size'];
-						if (isset($style['font']['color'])) $this->fontColor = $style['font']['color'];
-						if ($style['font']['bold']) $this->fontStyles .= '<b/>';
-						if ($style['font']['italic']) $this->fontStyles .= '<i/>';
-						if ($style['font']['underline']) $this->fontStyles .= '<u/>';
+						if (isset($style['font']['name']) && !empty($style['font']['name'])) $this->fontName = $style['font']['name'];
+						if (isset($style['font']['size']) && !empty($style['font']['size'])) $this->fontSize = $style['font']['size'];
+						if (isset($style['font']['color']) && !empty($style['font']['color'])) $this->fontColor = $style['font']['color'];
+						if (isset($style['font']['bold']) && !empty($style['font']['bold'])) $this->fontStyles .= '<b/>';
+						if (isset($style['font']['italic']) && !empty($style['font']['italic'])) $this->fontStyles .= '<i/>';
+						if (isset($style['font']['underline']) && !empty($style['font']['underline'])) $this->fontStyles .= '<u/>';
 
 						fwrite($fd, '	<font>');
 						if ($this->fontStyles) fwrite($fd, '		'.$this->fontStyles);
@@ -284,8 +285,8 @@ Class XLSXWriter
 						} else {
 							fwrite($fd, '		<color theme="1"/>');
 						}
-						fwrite($fd, '		<name val="'.$this->fontName.'"/>');
-						fwrite($fd, '		<fasmily val="2"/>');
+						if ($this->fontName) fwrite($fd, '		<name val="'.$this->fontName.'"/>');
+						fwrite($fd, '		<family val="2"/>');
 						if ($this->fontName == 'MS Sans Serif') {
 							fwrite($fd, '		<charset val="204"/>');
 						} else if ($this->fontName == 'Calibri') {
@@ -417,6 +418,7 @@ Class XLSXWriter
 		fwrite($fd, 	'</extLst>');
 		fwrite($fd, '</styleSheet>');
 		fclose($fd);
+
 		return $tempfile;
 	}
 
